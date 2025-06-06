@@ -1,0 +1,2 @@
+# PowerAppsPrivateEndpoints
+PowerAppsPrivateEndpoints
