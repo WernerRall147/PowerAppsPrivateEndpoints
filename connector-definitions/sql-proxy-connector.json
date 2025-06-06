@@ -1,0 +1,103 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "SQL Private Endpoint Proxy",
+    "description": "Custom connector to access Azure SQL Database via private endpoint through a proxy",
+    "version": "1.0.0"
+  },
+  "host": "apim-powerplatformproxy.azure-api.net",
+  "basePath": "/",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "securityDefinitions": {
+    "azure_ad": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://login.microsoftonline.com/common/oauth2/authorize",
+      "tokenUrl": "https://login.microsoftonline.com/common/oauth2/token",
+      "scopes": {}
+    }
+  },
+  "security": [
+    {
+      "azure_ad": []
+    }
+  ],
+  "paths": {
+    "/api/SqlQueryProxy": {
+      "post": {
+        "summary": "Execute SQL query",
+        "description": "Executes a SQL query against a private Azure SQL Database",
+        "operationId": "ExecuteSqlQuery",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "connectionString": {
+                  "type": "string",
+                  "description": "SQL connection string (without server name as it will be resolved via private endpoint)",
+                  "x-ms-visibility": "important"
+                },
+                "query": {
+                  "type": "string",
+                  "description": "SQL query to execute",
+                  "x-ms-visibility": "important"
+                }
+              },
+              "required": [
+                "connectionString",
+                "query"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Query executed successfully",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {},
+  "x-ms-connector-metadata": [
+    {
+      "propertyName": "Website",
+      "propertyValue": "https://github.com/yourgithub/PowerAppsPrivateEndpoints"
+    },
+    {
+      "propertyName": "Privacy policy",
+      "propertyValue": "https://privacy.microsoft.com/en-us/privacystatement"
+    },
+    {
+      "propertyName": "Categories",
+      "propertyValue": "Data"
+    }
+  ]
+}

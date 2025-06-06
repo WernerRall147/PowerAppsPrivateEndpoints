@@ -1,0 +1,258 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Blob Storage Private Endpoint Proxy",
+    "description": "Custom connector to access Azure Blob Storage via private endpoint through a proxy",
+    "version": "1.0.0"
+  },
+  "host": "apim-powerplatformproxy.azure-api.net",
+  "basePath": "/",
+  "schemes": [
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "securityDefinitions": {
+    "azure_ad": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://login.microsoftonline.com/common/oauth2/authorize",
+      "tokenUrl": "https://login.microsoftonline.com/common/oauth2/token",
+      "scopes": {}
+    }
+  },
+  "security": [
+    {
+      "azure_ad": []
+    }
+  ],
+  "paths": {
+    "/api/blob/list": {
+      "post": {
+        "summary": "List blobs in container",
+        "description": "Lists blobs in an Azure Storage container via private endpoint",
+        "operationId": "ListBlobs",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "connectionString": {
+                  "type": "string",
+                  "description": "Storage connection string",
+                  "x-ms-visibility": "important"
+                },
+                "containerName": {
+                  "type": "string",
+                  "description": "Container name",
+                  "x-ms-visibility": "important"
+                },
+                "prefix": {
+                  "type": "string",
+                  "description": "Optional prefix to filter blobs",
+                  "x-ms-visibility": "advanced"
+                }
+              },
+              "required": [
+                "connectionString",
+                "containerName"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blobs listed successfully",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Blob name"
+                  },
+                  "contentLength": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Content length in bytes"
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "description": "Content type"
+                  },
+                  "lastModified": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Last modified date"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/blob/download": {
+      "post": {
+        "summary": "Download blob",
+        "description": "Downloads a blob from Azure Storage via private endpoint",
+        "operationId": "DownloadBlob",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "connectionString": {
+                  "type": "string",
+                  "description": "Storage connection string",
+                  "x-ms-visibility": "important"
+                },
+                "containerName": {
+                  "type": "string",
+                  "description": "Container name",
+                  "x-ms-visibility": "important"
+                },
+                "blobName": {
+                  "type": "string",
+                  "description": "Blob name to download",
+                  "x-ms-visibility": "important"
+                }
+              },
+              "required": [
+                "connectionString",
+                "containerName",
+                "blobName"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blob downloaded successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Blob name"
+                },
+                "contentType": {
+                  "type": "string",
+                  "description": "Content type"
+                },
+                "contentLength": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Content length in bytes"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Base64-encoded content"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/blob/upload": {
+      "post": {
+        "summary": "Upload blob",
+        "description": "Uploads a blob to Azure Storage via private endpoint",
+        "operationId": "UploadBlob",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "connectionString": {
+                  "type": "string",
+                  "description": "Storage connection string",
+                  "x-ms-visibility": "important"
+                },
+                "containerName": {
+                  "type": "string",
+                  "description": "Container name",
+                  "x-ms-visibility": "important"
+                },
+                "blobName": {
+                  "type": "string",
+                  "description": "Blob name to upload",
+                  "x-ms-visibility": "important"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Base64-encoded content to upload",
+                  "x-ms-visibility": "important"
+                },
+                "contentType": {
+                  "type": "string",
+                  "description": "Content type of the blob",
+                  "x-ms-visibility": "advanced"
+                }
+              },
+              "required": [
+                "connectionString",
+                "containerName",
+                "blobName",
+                "content"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blob uploaded successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Blob name"
+                },
+                "size": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Size in bytes"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "URL of the blob"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {},
+  "x-ms-connector-metadata": [
+    {
+      "propertyName": "Website",
+      "propertyValue": "https://github.com/yourgithub/PowerAppsPrivateEndpoints"
+    },
+    {
+      "propertyName": "Privacy policy",
+      "propertyValue": "https://privacy.microsoft.com/en-us/privacystatement"
+    },
+    {
+      "propertyName": "Categories",
+      "propertyValue": "Data"
+    }
+  ]
+}

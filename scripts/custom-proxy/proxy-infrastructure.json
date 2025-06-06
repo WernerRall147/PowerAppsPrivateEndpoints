@@ -1,0 +1,258 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "functionAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the function app to create. Must be globally unique."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage account name for the function app. Must be globally unique and between 3-24 characters."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Virtual Network where private endpoints exist."
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the subnet for Functions VNet integration."
+      }
+    },
+    "apiManagementName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the API Management instance to create."
+      }
+    },
+    "apiManagementPublisherName": {
+      "type": "string",
+      "metadata": {
+        "description": "The publisher name for API Management."
+      }
+    },
+    "apiManagementPublisherEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "The publisher email for API Management."
+      }
+    },
+    "sqlServerName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional: The name of your Azure SQL Server with private endpoint (if using SQL)."
+      }
+    },
+    "databaseName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional: The name of your Azure SQL Database (if using SQL)."
+      }
+    },
+    "storageAccountBlobName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional: The name of your Azure Storage Account with private endpoint (if using Blob)."
+      }
+    }
+  },
+  "variables": {
+    "appServicePlanName": "[concat(parameters('functionAppName'), '-plan')]",
+    "functionRuntime": "dotnet",
+    "vnetSubnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]",
+    "useSql": "[not(empty(parameters('sqlServerName')))]",
+    "useBlob": "[not(empty(parameters('storageAccountBlobName')))]",
+    "hostingPlanSku": "EP1"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2021-02-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[variables('hostingPlanSku')]",
+        "tier": "ElasticPremium"
+      },
+      "kind": "elastic",
+      "properties": {
+        "maximumElasticWorkerCount": 20
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-02-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-04-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(parameters('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "[variables('functionRuntime')]"
+            },
+            {
+              "name": "WEBSITE_VNET_ROUTE_ALL",
+              "value": "1"
+            },
+            {
+              "name": "WEBSITE_DNS_SERVER",
+              "value": "168.63.129.16"
+            },
+            {
+              "name": "SqlConnectionString",
+              "value": "[if(variables('useSql'), concat('Server=tcp:', parameters('sqlServerName'), '.database.windows.net,1433;Database=', parameters('databaseName'), ';Authentication=Active Directory Managed Identity;'), '')]"
+            },
+            {
+              "name": "BlobStorageAccount",
+              "value": "[if(variables('useBlob'), parameters('storageAccountBlobName'), '')]"
+            }
+          ],
+          "use32BitWorkerProcess": false,
+          "ftpsState": "Disabled",
+          "minTlsVersion": "1.2"
+        }
+      },
+      "resources": [
+        {
+          "type": "networkConfig",
+          "apiVersion": "2020-06-01",
+          "name": "virtualNetwork",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+          ],
+          "properties": {
+            "subnetResourceId": "[variables('vnetSubnetRef')]",
+            "swiftSupported": true
+          }
+        }
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service",
+      "apiVersion": "2021-08-01",
+      "name": "[parameters('apiManagementName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Developer",
+        "capacity": 1
+      },
+      "properties": {
+        "publisherEmail": "[parameters('apiManagementPublisherEmail')]",
+        "publisherName": "[parameters('apiManagementPublisherName')]"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/apis",
+      "apiVersion": "2021-08-01",
+      "name": "[concat(parameters('apiManagementName'), '/private-proxy-api')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apiManagementName'))]",
+        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+      ],
+      "properties": {
+        "displayName": "Private Endpoint Proxy API",
+        "description": "API for accessing private Azure resources",
+        "serviceUrl": "[concat('https://', parameters('functionAppName'), '.azurewebsites.net/api')]",
+        "path": "private",
+        "protocols": [
+          "https"
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products",
+      "apiVersion": "2021-08-01",
+      "name": "[concat(parameters('apiManagementName'), '/private-access-product')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service', parameters('apiManagementName'))]"
+      ],
+      "properties": {
+        "displayName": "Private Access Product",
+        "description": "Product for accessing private Azure resources",
+        "subscriptionRequired": true,
+        "approvalRequired": false,
+        "state": "published"
+      }
+    },
+    {
+      "type": "Microsoft.ApiManagement/service/products/apis",
+      "apiVersion": "2021-08-01",
+      "name": "[concat(parameters('apiManagementName'), '/private-access-product/private-proxy-api')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ApiManagement/service/apis', parameters('apiManagementName'), 'private-proxy-api')]",
+        "[resourceId('Microsoft.ApiManagement/service/products', parameters('apiManagementName'), 'private-access-product')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[parameters('functionAppName')]"
+    },
+    "functionAppUrl": {
+      "type": "string",
+      "value": "[concat('https://', parameters('functionAppName'), '.azurewebsites.net')]"
+    },
+    "functionIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-02-01', 'full').identity.principalId]"
+    },
+    "apiManagementUrl": {
+      "type": "string",
+      "value": "[concat('https://', parameters('apiManagementName'), '.azure-api.net')]"
+    }
+  }
+}
