@@ -1,0 +1,24 @@
+graph TD
+    subgraph "Power Platform"
+        PA["Power Apps/Power Automate"] --> GC["Gateway Connection"]
+    end
+
+    subgraph "Azure Virtual Network"
+        GVM["Gateway VM"] --> PE["Private Endpoint"]
+        PE --> PDNS["Private DNS Zone"]
+    end
+
+    subgraph "Azure Resources"
+        DB["Azure SQL Database/Storage\n(Private Endpoint)"]
+    end
+
+    GC --> GVM
+    PE --> DB
+
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef powerplatform fill:#742774,stroke:#742774,color:white;
+    classDef db fill:#198754,stroke:#198754,color:white;
+
+    class PA,GC powerplatform;
+    class GVM,PE,PDNS azure;
+    class DB db;

@@ -216,263 +216,272 @@ The following outlines the high-level implementation steps for each approach. Cu
 
 ---
 
-## How to Use This Repository
+## Architecture Diagrams
 
-This repository contains scripts and configuration files to implement and test the three approaches for connecting Power Platform to Azure resources via private endpoints. Below are instructions for using the tools provided.
-
-### Directory Structure
+### 1. On-Premises Data Gateway Approach
 
 ```
-PowerAppsPrivateEndpoints/
-|-- scripts/                       # Individual approach-specific scripts
-|   |-- gateway-approach/          # Scripts for On-Premises Data Gateway approach
-|   |-- vnet-integration/          # Scripts for Power Platform VNet Integration
-|   |-- custom-proxy/              # Scripts for Custom Proxy approach
-|-- connector-definitions/         # Custom connector definitions for Power Platform
-|-- demo-environments/             # Complete demo environment deployment scripts
-    |-- gateway-demo/              # End-to-end Gateway demo
-    |-- vnet-integration-demo/     # End-to-end VNet Integration demo
-    |-- custom-proxy-demo/         # End-to-end Custom Proxy demo
+                                                     Azure
+┌────────────────────┐         ┌──────────────────────────────────────────────┐
+│                    │         │  Virtual Network                             │
+│   Power Platform   │         │  ┌─────────────┐         ┌───────────────┐   │
+│   ┌────────────┐   │         │  │             │         │ Private       │   │
+│   │            │   │         │  │   Gateway   │         │ Endpoint      │   │
+│   │ Power Apps │   │         │  │     VM      │◄────────┤               │   │
+│   │            │   │         │  │             │         │               │   │
+│   └────────────┘   │         │  └─────────────┘         └───────┬───────┘   │
+│         ▲          │         │                                   │           │
+└─────────┼──────────┘         └───────────────────────────┬──────┼───────────┘
+          │                                                │      │
+          │                                                ▼      │
+          │                                      ┌─────────────┐  │
+          │                                      │Private DNS  │  │
+          │                                      │   Zone      │  │
+          │                                      │             │  │
+          └─────────────────────────────────────►│             │  │
+                      Gateway                    └─────────────┘  │
+                      Connection                                  │
+                                                                  │
+                                                ┌─────────────────┴───────────┐
+                                                │                             │
+                                                │     Azure SQL Database      │
+                                                │     or Storage Account      │
+                                                │    (Private Endpoint)       │
+                                                │                             │
+                                                └─────────────────────────────┘
 ```
 
-### On-Premises Data Gateway Approach
+### 2. Power Platform VNet Integration (VNet Injection)
 
-#### Deploy Azure SQL with Private Endpoint
-
-The `sql-private-endpoint.bicep` template deploys an Azure SQL Server and database with a private endpoint.
-
-```powershell
-# Deploy using Azure CLI
-az deployment group create \
-  --resource-group <resource-group-name> \
-  --template-file ./scripts/gateway-approach/sql-private-endpoint.bicep \
-  --parameters sqlServerName=<sql-server-name> administratorLogin=<admin-username> \
-  administratorPassword=<admin-password> vnetName=<vnet-name> subnetName=<subnet-name>
-
-# Deploy using PowerShell
-New-AzResourceGroupDeployment -ResourceGroupName <resource-group-name> `
-  -TemplateFile ./scripts/gateway-approach/sql-private-endpoint.bicep `
-  -sqlServerName <sql-server-name> -administratorLogin <admin-username> `
-  -administratorPassword <admin-password> -vnetName <vnet-name> -subnetName <subnet-name>
+```
+                                                     Azure
+┌────────────────────┐         ┌──────────────────────────────────────────────┐
+│                    │         │  Virtual Network                             │
+│   Power Platform   │         │                                              │
+│   ┌────────────┐   │         │  ┌─────────────────────┐  ┌───────────────┐  │
+│   │            │   │         │  │                     │  │ Private       │  │
+│   │ Managed    │───┼─────────┼──┤  Delegated Subnet  ├──┤ Endpoint      │  │
+│   │ Environment│   │         │  │  (VNet Injection)  │  │               │  │
+│   └────────────┘   │         │  └─────────────────────┘  └───────┬───────┘  │
+│                    │         │                                   │          │
+└────────────────────┘         └───────────────────────────┬──────┼──────────┘
+                                                          │      │
+                                                          ▼      │
+                                                ┌─────────────┐  │
+                                                │Private DNS  │  │
+                                                │   Zone      │  │
+                                                │             │  │
+                                                └─────────────┘  │
+                                                                 │
+                                                ┌────────────────┴──────────┐
+                                                │                           │
+                                                │   Azure SQL Database      │
+                                                │   or Storage Account      │
+                                                │  (Private Endpoint)       │
+                                                │                           │
+                                                └───────────────────────────┘
 ```
 
-#### Deploy Gateway VM
+### 3. Custom Proxy/API Approach
 
-This script creates a virtual machine in your Azure VNet to host the data gateway.
-
-```powershell
-# Create secure password
-$securePassword = ConvertTo-SecureString "<your-password>" -AsPlainText -Force
-
-# Run the script
-./scripts/gateway-approach/deploy-gateway-vm.ps1 `
-  -ResourceGroupName "<resource-group-name>" `
-  -VNetName "<vnet-name>" `
-  -SubnetName "<subnet-name>" `
-  -VmName "<vm-name>" `
-  -AdminUsername "<admin-username>" `
-  -AdminPassword $securePassword
+```
+                                                     Azure
+┌────────────────────┐         ┌──────────────────────────────────────────────┐
+│                    │         │  Virtual Network                             │
+│   Power Platform   │         │                                              │
+│   ┌────────────┐   │         │  ┌─────────────┐      ┌─────────────┐        │
+│   │            │   │  HTTPS  │  │             │      │             │        │
+│   │ Power Apps ├───┼─────────┼─►│     API     ├─────►│  Functions  │        │
+│   │            │   │         │  │  Management │      │  (VNet      │        │
+│   └────────────┘   │         │  │             │      │ Integration) │        │
+│                    │         │  └─────────────┘      └──────┬──────┘        │
+└────────────────────┘         │                              │               │
+                               │                              │               │
+                               │                              │               │
+                               │                              ▼               │
+                               │                      ┌───────────────┐       │
+                               │                      │ Private       │       │
+                               │                      │ Endpoint      │       │
+                               │                      │               │       │
+                               │                      └───────┬───────┘       │
+                               │                              │               │
+                               └──────────────────────────────┼───────────────┘
+                                                             │
+                                                ┌────────────┴──────────────┐
+                                                │                           │
+                                                │   Azure SQL Database      │
+                                                │   or Storage Account      │
+                                                │  (Private Endpoint)       │
+                                                │                           │
+                                                └───────────────────────────┘
 ```
 
-#### Configure Gateway
+### 4. Side-by-Side Comparison
 
-Use this script after deploying the VM to install and configure the On-Premises Data Gateway.
-
-```powershell
-# Run the script on the gateway VM
-./scripts/gateway-approach/configure-gateway.ps1 `
-  -SqlServerName "<sql-server-name>.database.windows.net" `
-  -DatabaseName "<database-name>"
+```
+                                                     Azure
+┌────────────────────┐         ┌──────────────────────────────────────────────┐
+│                    │         │  Virtual Network                             │
+│   Power Platform   │         │                                              │
+│   ┌────────────┐   │         │  ┌─────────────┐      ┌─────────────┐        │
+│   │            │   │  HTTPS  │  │             │      │             │        │
+│   │ Power Apps ├───┼─────────┼─►│     API     ├─────►│  Functions  │        │
+│   │            │   │         │  │  Management │      │  (VNet      │        │
+│   └────────────┘   │         │  │             │      │ Integration) │        │
+│                    │         │  └─────────────┘      └──────┬──────┘        │
+└────────────────────┘         │                              │               │
+                               │                              │               │
+                               │                              │               │
+                               │                              ▼               │
+                               │                      ┌───────────────┐       │
+                               │                      │ Private       │       │
+                               │                      │ Endpoint      │       │
+                               │                      │               │       │
+                               │                      └───────┬───────┘       │
+                               │                              │               │
+                               └──────────────────────────────┼───────────────┘
+                                                             │
+                                                ┌────────────┴──────────────┐
+                                                │                           │
+                                                │   Azure SQL Database      │
+                                                │   or Storage Account      │
+                                                │  (Private Endpoint)       │
+                                                │                           │
+                                                └───────────────────────────┘
 ```
 
-#### End-to-End Gateway Demo
+---
 
-For a complete demo environment including all necessary resources:
+## Detailed Architecture Diagrams
 
-```powershell
-# Create secure password
-$securePassword = ConvertTo-SecureString "<your-password>" -AsPlainText -Force
+For a better visual representation, this repository includes Mermaid diagrams for each architecture approach. To view these diagrams:
 
-# Deploy complete environment
-./demo-environments/gateway-demo/deploy-gateway-demo.ps1 `
-  -ResourceGroupName "<resource-group-name>" `
-  -AdminUsername "<admin-username>" `
-  -AdminPassword $securePassword
+1. **GitHub Viewing**: If viewing on GitHub, the diagrams will render automatically in the browser.
+
+2. **Visual Studio Code**: Install the "Markdown Preview Mermaid Support" extension to view diagrams in the markdown preview.
+
+3. **Mermaid Live Editor**: You can copy the diagram code from the `.mmd` files in the `/diagrams` directory and paste into the [Mermaid Live Editor](https://mermaid.live) to view and modify them.
+
+4. **Export as Images**: From the Mermaid Live Editor, you can export the diagrams as PNG or SVG files if needed for presentations.
+
+### Gateway Approach
+
+```mermaid
+graph TD
+    subgraph "Power Platform"
+        PA["Power Apps/Power Automate"] --> GC["Gateway Connection"]
+    end
+
+    subgraph "Azure Virtual Network"
+        GVM["Gateway VM"] --> PE["Private Endpoint"]
+        PE --> PDNS["Private DNS Zone"]
+    end
+
+    subgraph "Azure Resources"
+        DB["Azure SQL Database/Storage\n(Private Endpoint)"]
+    end
+
+    GC --> GVM
+    PE --> DB
+
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef powerplatform fill:#742774,stroke:#742774,color:white;
+    classDef db fill:#198754,stroke:#198754,color:white;
+
+    class PA,GC powerplatform;
+    class GVM,PE,PDNS azure;
+    class DB db;
 ```
 
-### Power Platform VNet Integration Approach
+### VNet Integration Approach
 
-#### Set Up VNet and Subnet
+```mermaid
+graph TD
+    subgraph "Power Platform"
+        ME["Managed Environment"] --> DS["Delegated Subnet\n(VNet Injection)"]
+    end
 
-The `vnet-setup.bicep` template creates a VNet with a subnet properly configured for Power Platform integration.
+    subgraph "Azure Virtual Network"
+        DS --> PE["Private Endpoint"]
+        PE --> PDNS["Private DNS Zone"]
+    end
 
-```powershell
-# Deploy using Azure CLI
-az deployment group create \
-  --resource-group <resource-group-name> \
-  --template-file ./scripts/vnet-integration/vnet-setup.bicep \
-  --parameters vnetName=<vnet-name> powerPlatformSubnetName=<subnet-name>
+    subgraph "Azure Resources"
+        DB["Azure SQL Database/Storage\n(Private Endpoint)"]
+    end
 
-# Deploy using PowerShell
-New-AzResourceGroupDeployment -ResourceGroupName <resource-group-name> `
-  -TemplateFile ./scripts/vnet-integration/vnet-setup.bicep `
-  -vnetName <vnet-name> -powerPlatformSubnetName <subnet-name>
-```
+    PE --> DB
 
-#### Configure VNet Integration
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef powerplatform fill:#742774,stroke:#742774,color:white;
+    classDef db fill:#198754,stroke:#198754,color:white;
 
-This script configures the Enterprise Policy to link your Power Platform environment to the VNet.
-
-```powershell
-# Run the script
-./scripts/vnet-integration/configure-vnet-integration.ps1 `
-  -ResourceGroupName "<resource-group-name>" `
-  -EnvironmentId "/providers/Microsoft.PowerPlatform/environments/<environment-guid>" `
-  -VNetId "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Network/virtualNetworks/<vnet-name>" `
-  -SubnetId "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Network/virtualNetworks/<vnet-name>/subnets/<subnet-name>"
-```
-
-#### End-to-End VNet Integration Demo
-
-For a complete demo environment including all necessary resources:
-
-```powershell
-# Create secure password
-$securePassword = ConvertTo-SecureString "<your-password>" -AsPlainText -Force
-
-# Deploy complete environment
-./demo-environments/vnet-integration-demo/deploy-vnet-integration-demo.ps1 `
-  -ResourceGroupName "<resource-group-name>" `
-  -PowerPlatformEnvironmentId "/providers/Microsoft.PowerPlatform/environments/<environment-guid>" `
-  -AdminUsername "<admin-username>" `
-  -AdminPassword $securePassword
+    class ME powerplatform;
+    class DS,PE,PDNS azure;
+    class DB db;
 ```
 
 ### Custom Proxy Approach
 
-#### Deploy Proxy Infrastructure
+```mermaid
+graph TD
+    subgraph "Power Platform"
+        PA["Power Apps/Power Automate"] --> CC["Custom Connector"]
+    end
 
-Use this script to deploy Azure Functions and API Management that will serve as a proxy to private resources.
+    subgraph "Azure Virtual Network"
+        APIM["API Management"] --> FA["Azure Functions\n(VNet Integration)"]
+        FA --> PE["Private Endpoint"]
+        PE --> PDNS["Private DNS Zone"]
+    end
 
-```powershell
-./scripts/custom-proxy/deploy-custom-proxy.ps1 `
-  -ResourceGroupName "<resource-group-name>" `
-  -FunctionAppName "<function-app-name>" `
-  -StorageAccountName "<storage-account-name>" `
-  -ApimName "<apim-name>" `
-  -PublisherName "<publisher-name>" `
-  -PublisherEmail "<publisher-email>" `
-  -VNetName "<vnet-name>" `
-  -SubnetName "<subnet-name>" `
-  -SqlServerName "<sql-server-name>" `
-  -DatabaseName "<database-name>" `
-  -BlobStorageAccountName "<blob-storage-account-name>"
+    subgraph "Azure Resources"
+        DB["Azure SQL Database/Storage\n(Private Endpoint)"]
+    end
+
+    CC --> APIM
+    PE --> DB
+
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef powerplatform fill:#742774,stroke:#742774,color:white;
+    classDef db fill:#198754,stroke:#198754,color:white;
+
+    class PA,CC powerplatform;
+    class APIM,FA,PE,PDNS azure;
+    class DB db;
 ```
 
-#### Custom Connector Definitions
+### Side-by-Side Comparison
 
-Import one of the connector definition JSON files into Power Platform to create a custom connector:
-
-1. In the Power Platform maker portal, go to **Data** > **Custom Connectors**
-2. Click **New custom connector** > **Import an OpenAPI file**
-3. Upload the JSON file from the `/connector-definitions/` folder
-4. Configure authentication (typically Azure AD OAuth)
-5. Test and create the connector
-
-#### End-to-End Custom Proxy Demo
-
-For a complete demo environment including all necessary resources:
-
-```powershell
-# Create secure password
-$securePassword = ConvertTo-SecureString "<your-password>" -AsPlainText -Force
-
-# Deploy complete environment
-./demo-environments/custom-proxy-demo/deploy-custom-proxy-demo.ps1 `
-  -ResourceGroupName "<resource-group-name>" `
-  -FunctionAppName "<function-app-name>" `
-  -StorageAccountName "<storage-account-name>" `
-  -ApimName "<apim-name>" `
-  -PublisherName "<publisher-name>" `
-  -PublisherEmail "<publisher-email>" `
-  -AdminUsername "<admin-username>" `
-  -AdminPassword $securePassword
+```mermaid
+graph TD
+    subgraph "Architecture Options for Power Platform with Private Endpoints"
+        subgraph "Option 1: Gateway Approach"
+            PA1["Power Apps"] --> GW["On-Premises\nData Gateway"] --> PE1["Private\nEndpoint"]
+        end
+        
+        subgraph "Option 2: VNet Integration"
+            PA2["Power Apps\n(Managed Environment)"] --> VI["VNet Injection\n(Delegated Subnet)"] --> PE2["Private\nEndpoint"]
+        end
+        
+        subgraph "Option 3: Custom Proxy"
+            PA3["Power Apps"] --> API["API Management"] --> FN["Azure Functions"] --> PE3["Private\nEndpoint"]
+        end
+    end
+    
+    PE1 --> DB1["Azure SQL/Storage\n(Private)"]
+    PE2 --> DB2["Azure SQL/Storage\n(Private)"]
+    PE3 --> DB3["Azure SQL/Storage\n(Private)"]
+    
+    classDef powerapp fill:#742774,stroke:#742774,color:white;
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef endpoints fill:#d4e09b,stroke:#333,color:black;
+    classDef db fill:#6e8894,stroke:#333,color:white;
+    
+    class PA1,PA2,PA3 powerapp;
+    class GW,VI,API,FN azure;
+    class PE1,PE2,PE3 endpoints;
+    class DB1,DB2,DB3 db;
 ```
-
-### Validation and Testing
-
-After deploying any of the approaches:
-
-1. **For Gateway Approach**:
-   - RDP to the gateway VM
-   - Register the gateway in the Power Platform admin center 
-   - Create a SQL connection in Power Apps/Power Automate that uses the gateway
-
-2. **For VNet Integration**:
-   - Verify in the Power Platform admin center that the environment shows VNet Integration
-   - Create a direct connection to the private resource in Power Apps/Power Automate
-
-3. **For Custom Proxy**:
-   - Import the custom connector definition into Power Platform
-   - Create a connection using the custom connector
-   - Use the connection in a Power App or Flow
-
-### Troubleshooting
-
-If you encounter issues with any of the approaches:
-
-1. **Connectivity Issues**:
-   - Verify private DNS resolution is working correctly
-   - Check NSG rules to ensure traffic is allowed
-   - For gateway approach, verify the gateway is online and configured correctly
-
-2. **VNet Integration Issues**:
-   - Ensure the subnet is correctly delegated to Power Platform
-   - Verify the environment is a Managed Environment
-   - Check that the Enterprise Policy is correctly linked
-
-3. **Custom Proxy Issues**:
-   - Check Azure Function logs for errors
-   - Verify the VNet integration for the Function App is working
-   - Test the API with Postman before using in Power Platform
 
 ---
-
-## References
-
-- [Virtual Network support overview](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview)
-- [Set up Virtual Network support for Power Platform](https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-setup-configure)
-- [Managed Environments overview](https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-overview)
-- [Azure Blob Storage Connectors](https://learn.microsoft.com/en-us/connectors/azureblob/)
-- [What is a VNet data gateway](https://learn.microsoft.com/en-us/data-integration/vnet/overview)
-- [Power Automate with Azure SQL MI via Private Endpoint](https://stackoverflow.com/questions/79607794/recommended-setup-for-connecting-power-automate-cloud-to-azure-sql-managed-insta)
-
-https://learn.microsoft.com/en-us/answers/questions/2244028/how-to-integrated-azure-in-powerplatform
-Favicon
-Power Platform Managed Environments - Learn Microsoft
-
-https://learn.microsoft.com/en-us/shows/dynamics-365-fasttrack-architecture-insights/power-platform-managed-environments
-Favicon
-Virtual Network support overview - Power Platform | Microsoft Learn
-
-https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview
-Favicon
-Set up Virtual Network support for Power Platform - Power Platform | Microsoft Learn
-
-https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-setup-configure
-Favicon
-Virtual Network support overview - Power Platform | Microsoft Learn
-
-https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview
-Favicon
-Azure Blob Storage - Connectors | Microsoft Learn
-
-https://learn.microsoft.com/en-us/connectors/azureblob/
-Favicon
-Azure Blob Storage - Connectors | Microsoft Learn
-
-https://learn.microsoft.com/en-us/connectors/azureblob/
-Favicon
-Virtual Network support overview - Power Platform | Microsoft Learn
-
-https://learn.microsoft.com/en-us/power-platform/admin/vnet-support-overview

@@ -1,0 +1,28 @@
+graph TD
+    subgraph "Architecture Options for Power Platform with Private Endpoints"
+        subgraph "Option 1: Gateway Approach"
+            PA1["Power Apps"] --> GW["On-Premises\nData Gateway"] --> PE1["Private\nEndpoint"]
+        end
+        
+        subgraph "Option 2: VNet Integration"
+            PA2["Power Apps\n(Managed Environment)"] --> VI["VNet Injection\n(Delegated Subnet)"] --> PE2["Private\nEndpoint"]
+        end
+        
+        subgraph "Option 3: Custom Proxy"
+            PA3["Power Apps"] --> API["API Management"] --> FN["Azure Functions"] --> PE3["Private\nEndpoint"]
+        end
+    end
+    
+    PE1 --> DB1["Azure SQL/Storage\n(Private)"]
+    PE2 --> DB2["Azure SQL/Storage\n(Private)"]
+    PE3 --> DB3["Azure SQL/Storage\n(Private)"]
+    
+    classDef powerapp fill:#742774,stroke:#742774,color:white;
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef endpoints fill:#d4e09b,stroke:#333,color:black;
+    classDef db fill:#6e8894,stroke:#333,color:white;
+    
+    class PA1,PA2,PA3 powerapp;
+    class GW,VI,API,FN azure;
+    class PE1,PE2,PE3 endpoints;
+    class DB1,DB2,DB3 db;

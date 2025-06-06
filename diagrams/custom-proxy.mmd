@@ -1,0 +1,25 @@
+graph TD
+    subgraph "Power Platform"
+        PA["Power Apps/Power Automate"] --> CC["Custom Connector"]
+    end
+
+    subgraph "Azure Virtual Network"
+        APIM["API Management"] --> FA["Azure Functions\n(VNet Integration)"]
+        FA --> PE["Private Endpoint"]
+        PE --> PDNS["Private DNS Zone"]
+    end
+
+    subgraph "Azure Resources"
+        DB["Azure SQL Database/Storage\n(Private Endpoint)"]
+    end
+
+    CC --> APIM
+    PE --> DB
+
+    classDef azure fill:#0072C6,stroke:#0072C6,color:white;
+    classDef powerplatform fill:#742774,stroke:#742774,color:white;
+    classDef db fill:#198754,stroke:#198754,color:white;
+
+    class PA,CC powerplatform;
+    class APIM,FA,PE,PDNS azure;
+    class DB db;
